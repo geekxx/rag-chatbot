@@ -8,14 +8,15 @@ class AIGenerator:
     SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to a comprehensive search tool for course information.
 
 Search Tool Usage:
-- Use the search tool **only** for questions about specific course content or detailed educational materials
-- **One search per query maximum**
-- Synthesize search results into accurate, fact-based responses
-- If search yields no results, state this clearly without offering alternatives
+- Use `search_course_content` for questions about specific course topics or detailed lesson material
+- Use `get_course_outline` for questions about a course's structure, lesson list, or overview
+- **One tool call per query maximum**
+- Synthesize results into accurate, fact-based responses
+- If a tool yields no results, state this clearly. If asking about course content with no results, you may provide general knowledge context.
 
 Response Protocol:
 - **General knowledge questions**: Answer using existing knowledge without searching
-- **Course-specific questions**: Search first, then answer
+- **Course-specific questions**: Search first, use results if available, or provide general knowledge if search yields nothing
 - **No meta-commentary**:
  - Provide direct answers only — no reasoning process, search explanations, or question-type analysis
  - Do not mention "based on the search results"
@@ -89,47 +90,74 @@ Provide only the direct answer to what was asked.
     def _handle_tool_execution(self, initial_response, base_params: Dict[str, Any], tool_manager):
         """
         Handle execution of tool calls and get follow-up response.
-        
+
         Args:
             initial_response: The response containing tool use requests
             base_params: Base API parameters
             tool_manager: Manager to execute tools
-            
+
         Returns:
             Final response text after tool execution
         """
         # Start with existing messages
         messages = base_params["messages"].copy()
-        
-        # Add AI's tool use response
-        messages.append({"role": "assistant", "content": initial_response.content})
-        
+
+        # Convert assistant content blocks to serializable dicts
+        assistant_content = []
+        for block in initial_response.content:
+            if block.type == "text":
+                assistant_content.append({"type": "text", "text": block.text})
+            elif block.type == "tool_use":
+                # Use model_dump() for proper serialization, remove None fields
+                if hasattr(block, "model_dump"):
+                    block_dict = block.model_dump()
+                    # Clean up None values that aren't needed
+                    block_dict = {k: v for k, v in block_dict.items() if v is not None}
+                    assistant_content.append(block_dict)
+                else:
+                    assistant_content.append({
+                        "type": "tool_use",
+                        "id": block.id,
+                        "name": block.name,
+                        "input": block.input,
+                    })
+
+        # Add AI's tool use response with serialized content
+        messages.append({"role": "assistant", "content": assistant_content})
+
         # Execute all tool calls and collect results
         tool_results = []
         for content_block in initial_response.content:
             if content_block.type == "tool_use":
                 tool_result = tool_manager.execute_tool(
-                    content_block.name, 
+                    content_block.name,
                     **content_block.input
                 )
-                
+
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": content_block.id,
                     "content": tool_result
                 })
-        
+
         # Add tool results as single message
         if tool_results:
             messages.append({"role": "user", "content": tool_results})
-        
+
         # Prepare final API call without tools
         final_params = {
             **self.base_params,
             "messages": messages,
             "system": base_params["system"]
         }
-        
+
         # Get final response
         final_response = self.client.messages.create(**final_params)
+
+        # Handle case where response has no content (empty content list)
+        if not final_response.content:
+            # Fallback: generate a response based on tool results
+            tool_summary = "\n".join([f"- {tr['content']}" for tr in tool_results])
+            return f"Based on the search: {tool_summary}"
+
         return final_response.content[0].text

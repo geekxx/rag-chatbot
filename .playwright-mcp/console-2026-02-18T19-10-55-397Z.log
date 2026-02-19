@@ -1,0 +1,4 @@
+[    7820ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ http://127.0.0.1:8000/api/courses:0
+[    7820ms] [ERROR] Error loading course stats: TypeError: Failed to fetch
+    at loadCourseStats (http://127.0.0.1:8000/script.js?v=10:176:32)
+    at HTMLDocument.<anonymous> (http://127.0.0.1:8000/script.js?v=10:21:5) @ http://127.0.0.1:8000/script.js?v=10:198

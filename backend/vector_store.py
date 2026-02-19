@@ -2,6 +2,7 @@ import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+import json
 from models import Course, CourseChunk
 from sentence_transformers import SentenceTransformer
 
@@ -134,8 +135,6 @@ class VectorStore:
     
     def add_course_metadata(self, course: Course):
         """Add course information to the catalog for semantic search"""
-        import json
-
         course_text = course.title
         
         # Build lessons metadata and serialize as JSON string
@@ -215,7 +214,6 @@ class VectorStore:
     
     def get_all_courses_metadata(self) -> List[Dict[str, Any]]:
         """Get metadata for all courses in the vector store"""
-        import json
         try:
             results = self.course_catalog.get()
             if results and 'metadatas' in results:
@@ -248,7 +246,6 @@ class VectorStore:
     
     def get_lesson_link(self, course_title: str, lesson_number: int) -> Optional[str]:
         """Get lesson link for a given course title and lesson number"""
-        import json
         try:
             # Get course by ID (title is the ID)
             results = self.course_catalog.get(ids=[course_title])
@@ -264,4 +261,33 @@ class VectorStore:
             return None
         except Exception as e:
             print(f"Error getting lesson link: {e}")
+
+    def get_course_outline(self, course_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Returns course title, course link, and lesson list for a given course name.
+        Uses fuzzy matching via _resolve_course_name. Returns None if not found.
+
+        Args:
+            course_name: Course name (partial matches work via fuzzy matching)
+
+        Returns:
+            Dict with 'title', 'course_link', and 'lessons' (list of dicts with lesson_number and lesson_title)
+        """
+        resolved_title = self._resolve_course_name(course_name)
+        if not resolved_title:
+            return None
+        try:
+            result = self.course_catalog.get(ids=[resolved_title], include=["metadatas"])
+            if not result["metadatas"]:
+                return None
+            meta = result["metadatas"][0]
+            lessons = json.loads(meta.get("lessons_json", "[]"))
+            return {
+                "title": meta.get("title", resolved_title),
+                "course_link": meta.get("course_link"),
+                "lessons": lessons,
+            }
+        except Exception as e:
+            print(f"Error getting course outline: {e}")
+            return None
     
