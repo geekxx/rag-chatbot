@@ -15,8 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
     sendButton = document.getElementById('sendButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
-    
+
     setupEventListeners();
+    initializeTheme();
     createNewSession();
     loadCourseStats();
 });
@@ -28,8 +29,20 @@ function setupEventListeners() {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
-    
-    
+
+    // Theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+        // Allow keyboard navigation with Space or Enter
+        themeToggle.addEventListener('keypress', (e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                toggleTheme();
+            }
+        });
+    }
+
     // New chat button
     document.getElementById('newChatBtn').addEventListener('click', createNewSession);
 
@@ -43,6 +56,49 @@ function setupEventListeners() {
     });
 }
 
+// Theme Management
+function initializeTheme() {
+    // Check for saved theme preference or use system preference
+    const savedTheme = localStorage.getItem('theme');
+    let prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    if (savedTheme) {
+        setTheme(savedTheme);
+    } else if (prefersDark) {
+        setTheme('dark-mode');
+    } else {
+        setTheme('light-mode');
+    }
+}
+
+function toggleTheme() {
+    const currentTheme = document.body.classList.contains('light-mode') ? 'light-mode' : 'dark-mode';
+    const newTheme = currentTheme === 'dark-mode' ? 'light-mode' : 'dark-mode';
+    setTheme(newTheme);
+}
+
+function setTheme(theme) {
+    // Remove both theme classes
+    document.body.classList.remove('dark-mode', 'light-mode');
+
+    // Add the new theme class
+    document.body.classList.add(theme);
+
+    // Save preference to localStorage
+    localStorage.setItem('theme', theme);
+
+    // Update the button's aria-label based on current theme
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        if (theme === 'dark-mode') {
+            themeToggle.setAttribute('aria-label', 'Switch to light mode');
+            themeToggle.title = 'Switch to light mode';
+        } else {
+            themeToggle.setAttribute('aria-label', 'Switch to dark mode');
+            themeToggle.title = 'Switch to dark mode';
+        }
+    }
+}
 
 // Chat Functions
 async function sendMessage() {
